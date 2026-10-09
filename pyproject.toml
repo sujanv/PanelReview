@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "panel-review"
+version = "1.0.0"
+description = "AI-based Multi-Persona Panel Review System for Polyglot Codebases"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+    { name = "PanelReview Team" }
+]
+keywords = ["ai", "code-review", "personas", "security", "observability", "llm", "polyglot"]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+]
+rich = [
+    "rich>=13.0.0",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+panel-review = "panel_review.cli:main"
+staged-push = "scripts.staged_git_pusher:main"
