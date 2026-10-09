@@ -1,0 +1,182 @@
+# AI Agent Panel Review Configuration
+# Supports OpenAI, Anthropic, Google Gemini, Ollama (Local), and Custom OpenAI-Compatible Endpoints
+
+version: "1.0"
+
+# Default Model Configuration
+# Can be overridden per persona below
+default_provider: "mock" # options: "openai", "anthropic", "gemini", "ollama", "custom", "mock"
+default_model: "mock-expert-v1" # e.g., "gpt-4o", "claude-3-5-sonnet", "gemini-1.5-pro", "llama3.3"
+
+providers:
+  openai:
+    api_key_env: "OPENAI_API_KEY"
+    base_url: "https://api.openai.com/v1"
+    model: "gpt-4o"
+    temperature: 0.2
+    max_tokens: 4096
+
+  anthropic:
+    api_key_env: "ANTHROPIC_API_KEY"
+    base_url: "https://api.anthropic.com/v1"
+    model: "claude-3-5-sonnet-20241022"
+    temperature: 0.2
+    max_tokens: 4096
+
+  gemini:
+    api_key_env: "GEMINI_API_KEY"
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
+    model: "gemini-1.5-pro"
+    temperature: 0.2
+    max_tokens: 4096
+
+  ollama:
+    base_url: "http://localhost:11434"
+    model: "llama3.3"
+    temperature: 0.2
+    max_tokens: 4096
+
+  custom:
+    api_key_env: "CUSTOM_LLM_API_KEY"
+    base_url: "http://localhost:8000/v1"
+    model: "custom-model"
+    temperature: 0.2
+    max_tokens: 4096
+
+  mock:
+    model: "mock-expert-v1"
+    temperature: 0.0
+    max_tokens: 2048
+
+# Repository Scanner Settings
+scanner:
+  max_file_size_kb: 512
+  max_total_files: 100
+  respect_gitignore: true
+  exclude_dirs:
+    - ".git"
+    - "node_modules"
+    - "vendor"
+    - "dist"
+    - "build"
+    - "target"
+    - "__pycache__"
+    - ".venv"
+    - "venv"
+    - ".idea"
+    - ".vscode"
+    - "bin"
+    - "obj"
+  exclude_files:
+    - "package-lock.json"
+    - "yarn.lock"
+    - "pnpm-lock.yaml"
+    - "Cargo.lock"
+    - "poetry.lock"
+    - "go.sum"
+    - "*.min.js"
+    - "*.min.css"
+    - "*.map"
+
+# Persona Definitions (Configurable Expert Board)
+personas:
+  - id: "security"
+    enabled: true
+    name: "Security Engineer"
+    title: "Application Security & Threat Modeling Specialist"
+    emoji: "🛡️"
+    provider: "default"
+    model: "default"
+    focus_areas:
+      - "OWASP Top 10 and CWE vulnerabilities"
+      - "Hardcoded credentials, API keys, and sensitive tokens"
+      - "Injection vectors (SQL, Command, LDAP, Template)"
+      - "Authentication, authorization, and session boundaries"
+      - "Input validation, output encoding, and SSRF prevention"
+      - "Insecure cryptographic algorithms or random number generation"
+    severity_threshold: "LOW"
+
+  - id: "observability"
+    enabled: true
+    name: "Observability & SRE Engineer"
+    title: "Telemetry, Resilience & Production Readiness Specialist"
+    emoji: "📡"
+    provider: "default"
+    model: "default"
+    focus_areas:
+      - "Structured logging with contextual trace correlation"
+      - "Distributed tracing and OpenTelemetry compatibility"
+      - "Operational metrics (RED/USE methods: rate, errors, duration)"
+      - "Network call timeouts, retry backoff, and circuit breaking"
+      - "Health probes (liveness, readiness, startup)"
+      - "PII/Secret masking in log streams"
+    severity_threshold: "MEDIUM"
+
+  - id: "performance"
+    enabled: true
+    name: "Performance & Scalability Engineer"
+    title: "Resource Efficiency & High-Throughput Specialist"
+    emoji: "⚡"
+    provider: "default"
+    model: "default"
+    focus_areas:
+      - "Algorithmic time and space complexity bottlenecks"
+      - "Memory leaks, unmanaged handles, and streaming vs buffering"
+      - "Database query patterns (N+1 queries, unindexed filters)"
+      - "Concurrency safety, deadlocks, and race conditions"
+      - "Caching strategy and cache invalidation consistency"
+    severity_threshold: "MEDIUM"
+
+  - id: "architecture"
+    enabled: true
+    name: "Software Architect"
+    title: "Clean Architecture & Modularity Specialist"
+    emoji: "🏗️"
+    provider: "default"
+    model: "default"
+    focus_areas:
+      - "SOLID and DRY engineering principles"
+      - "Separation of concerns and modular boundary isolation"
+      - "Coupling and cohesion between components"
+      - "API contract ergonomics and error hierarchy design"
+      - "Maintainability and technical debt prevention"
+    severity_threshold: "LOW"
+
+  - id: "qa"
+    enabled: true
+    name: "QA & Reliability Engineer"
+    title: "Test Engineering & Edge Case Specialist"
+    emoji: "🧪"
+    provider: "default"
+    model: "default"
+    focus_areas:
+      - "Testability and separation of pure business logic from I/O"
+      - "Boundary conditions and edge case coverage"
+      - "Defensive programming and null/nil safety"
+      - "Mockability and integration test ergonomics"
+      - "Error propagation and panic/crash prevention"
+    severity_threshold: "LOW"
+
+  - id: "compliance"
+    enabled: true
+    name: "Compliance & Privacy Engineer"
+    title: "Data Governance & Policy Specialist"
+    emoji: "📜"
+    provider: "default"
+    model: "default"
+    focus_areas:
+      - "GDPR, CCPA, and PII protection adherence"
+      - "Data retention and deletion auditability"
+      - "Third-party open-source license risk"
+      - "Audit logging for critical security actions"
+    severity_threshold: "MEDIUM"
+
+# Panel Consensus & Chair Moderation
+consensus:
+  enabled: true
+  chair_title: "Panel Review Chair"
+  chair_emoji: "⚖️"
+  provider: "default"
+  model: "default"
+  min_approval_score: 75 # 0-100 scale
+  critical_issues_block_approval: true
