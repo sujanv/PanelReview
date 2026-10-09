@@ -1,0 +1,5 @@
+# Core runtime uses Python standard library for maximum portability and zero-install operation.
+# The following packages are optional enhancements for rich CLI formatting and YAML parsing:
+pyyaml>=6.0.1
+rich>=13.7.0
+requests>=2.31.0
