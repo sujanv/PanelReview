@@ -14,6 +14,10 @@ from panel_review.engine.report import ReportGenerator
 from panel_review.engine.sarif import SarifExporter
 from panel_review.engine.deliberation import DeliberationEngine
 from panel_review.engine.remediator import PatchRemediator
+from panel_review.engine.trends import TrendTracker
+from panel_review.engine.consensus_voting import ConsensusVotingEngine, VotingStrategy
+from panel_review.ci.pr_bot import PRCommentGenerator
+from panel_review.validator import ConfigValidator
 from panel_review.presets import PRESETS, apply_preset
 from panel_review.providers.factory import ProviderFactory
 
@@ -37,6 +41,8 @@ def build_parser() -> argparse.ArgumentParser:
     review_p.add_argument("--provider", help="Override default LLM provider (openai, anthropic, gemini, ollama, mock)")
     review_p.add_argument("--model", "-m", help="Override default LLM model name")
     review_p.add_argument("--max-files", type=int, default=50, help="Max files to scan for review (default: 50)")
+    review_p.add_argument("--strategy", choices=["weighted_domain", "borda_count", "pessimistic_worst_case", "simple_average"], default="weighted_domain", help="Consensus aggregation voting strategy (default: weighted_domain)")
+    review_p.add_argument("--record-trend", action="store_true", help="Record review metrics to historical trend tracker")
     review_p.add_argument("--output-md", default="panel_review_report.md", help="Path for markdown report")
     review_p.add_argument("--output-html", default="panel_review_report.html", help="Path for interactive HTML report")
     review_p.add_argument("--output-json", default=None, help="Path for JSON report")
@@ -46,6 +52,19 @@ def build_parser() -> argparse.ArgumentParser:
     fix_p = subparsers.add_parser("fix", help="Generate automated patch fixes for review findings")
     fix_p.add_argument("--path", "-p", default=".", help="Target directory to inspect and generate fixes for")
     fix_p.add_argument("--output-patch", default="panel_review_fixes.patch", help="Path to output unified diff patch file")
+
+    # PR Comment command
+    pr_p = subparsers.add_parser("pr-comment", help="Generate a GitHub/GitLab Pull Request review comment markdown")
+    pr_p.add_argument("--path", "-p", default=".", help="Target directory to review (default: .)")
+    pr_p.add_argument("--output", default="pr_comment.md", help="Path to write PR comment markdown")
+
+    # Trends command
+    trends_p = subparsers.add_parser("trends", help="View historical codebase health and score regression trends")
+    trends_p.add_argument("--history-file", default=".panel_review_history.json", help="Path to history file")
+
+    # Validate Config command
+    val_p = subparsers.add_parser("validate-config", help="Validate configuration file schema and environment API keys")
+    val_p.add_argument("--config", "-c", help="Path to config file")
 
     # Serve command
     serve_p = subparsers.add_parser("serve", help="Launch the local live Web Dashboard GUI server")
@@ -149,10 +168,22 @@ def handle_review(args: argparse.Namespace) -> int:
             print(f"      Conducted {transcript.rounds_conducted} cross-domain debate exchanges.")
             report.executive_summary += f"\n\n{transcript.to_markdown()}"
 
-        print(f"\n[3/3] ⚖️  Panel Consensus Synthesized!")
+        # Apply custom consensus voting strategy if requested
+        if hasattr(args, "strategy") and args.strategy:
+            strat = VotingStrategy(args.strategy)
+            calibrated_score, calibrated_verdict = ConsensusVotingEngine.calculate_score(report.persona_results, strat)
+            report.overall_score = calibrated_score
+            report.overall_verdict = calibrated_verdict
+
+        print(f"\n[3/3] ⚖️  Panel Consensus Synthesized! (Strategy: {getattr(args, 'strategy', 'weighted_domain')})")
         print(f"      Overall Verdict     : {report.overall_verdict.value}")
         print(f"      Overall Health Score: {report.overall_score}/100")
         print(f"      Total Findings      : {len(report.consolidated_findings)}")
+
+        # Historical Trend Tracking
+        if getattr(args, "record_trend", False):
+            analysis = TrendTracker.record_run(report)
+            print(TrendTracker.format_trend_summary(analysis))
 
         # Write reports
         if args.output_md:
@@ -213,6 +244,44 @@ def handle_serve(args: argparse.Namespace) -> int:
     from panel_review.web.server import start_dashboard_server
     start_dashboard_server(port=args.port)
     return 0
+
+
+def handle_pr_comment(args: argparse.Namespace) -> int:
+    config = load_config()
+    scanner = RepoScanner(config.scanner)
+    repo_info = scanner.scan_directory(args.path)
+    engine = ReviewEngine(config)
+    print(f"Generating PR review comment for {repo_info.total_files} files in {os.path.abspath(args.path)}...")
+    report = engine.run_review(repo_info)
+    pr_markdown = PRCommentGenerator.format_pr_comment(report)
+    with open(args.output, "w", encoding="utf-8") as f:
+        f.write(pr_markdown)
+    print(f"📝 PR review comment markdown saved to: {os.path.abspath(args.output)}")
+    return 0
+
+
+def handle_trends(args: argparse.Namespace) -> int:
+    history = TrendTracker.load_history(args.history_file)
+    if not history:
+        print(f"No historical review data found in {args.history_file}.")
+        print("Run `panel-review review --record-trend` to begin tracking scores over time.")
+        return 0
+
+    print(f"\n📈 Historical Codebase Review Trends ({len(history)} snapshots):\n")
+    print("| Timestamp | Commit | Branch | Score | Verdict | Critical | High |")
+    print("| :--- | :--- | :--- | :---: | :--- | :---: | :---: |")
+    for snap in history:
+        fc = snap.get("finding_counts", {})
+        print(f"| {snap['timestamp'][:19]} | `{snap['commit_hash']}` | `{snap['branch']}` | **{snap['overall_score']}** | `{snap['overall_verdict']}` | {fc.get('CRITICAL', 0)} | {fc.get('HIGH', 0)} |")
+    print()
+    return 0
+
+
+def handle_validate_config(args: argparse.Namespace) -> int:
+    config = load_config(args.config)
+    report = ConfigValidator.validate(config)
+    report.print_diagnostics()
+    return 0 if report.is_valid else 1
 
 
 def handle_presets() -> int:
@@ -282,6 +351,12 @@ def main() -> int:
         return handle_fix(args)
     elif args.command == "serve":
         return handle_serve(args)
+    elif args.command == "pr-comment":
+        return handle_pr_comment(args)
+    elif args.command == "trends":
+        return handle_trends(args)
+    elif args.command == "validate-config":
+        return handle_validate_config(args)
     elif args.command == "presets":
         return handle_presets()
     elif args.command == "personas":
