@@ -81,6 +81,18 @@ COMMIT_MESSAGE_MAP = {
     "tests/test_presets.py": "test: add review presets tests",
     "tests/test_staged_pusher.py": "test: add staged pusher tests",
     ".github/workflows/panel-review.yml": "ci: add GitHub Actions workflow for PR reviews and SARIF uploads",
+    "panel_review/validator.py": "feat(validator): implement configuration schema and environment linter",
+    "panel_review/scanner/secret_scanner.py": "feat(scanner): implement secret and credential scanner with entropy heuristics",
+    "panel_review/engine/consensus_voting.py": "feat(engine): implement multi-model consensus voting strategies",
+    "panel_review/engine/trends.py": "feat(engine): implement historical benchmark and regression tracker",
+    "panel_review/ci/__init__.py": "feat(ci): initialize continuous integration module",
+    "panel_review/ci/pr_bot.py": "feat(ci): implement interactive GitHub and GitLab PR review comment bot",
+    "pkg/scanner/scanner.go": "feat(go): implement reusable Go AST scanner and secret analyzer",
+    "tests/test_secret_scanner.py": "test: add unit tests for AST secret scanner and entropy detection",
+    "tests/test_trends.py": "test: add unit tests for historical health trends and regression tracker",
+    "tests/test_voting.py": "test: add unit tests for multi-model consensus voting strategies",
+    "tests/test_pr_bot.py": "test: add unit tests for pull request comment generator",
+    "tests/test_validator.py": "test: add unit tests for configuration validator and linter",
     "Makefile": "build: add project automation Makefile",
     "README.md": "docs: add comprehensive architecture, quickstart, and reference documentation",
     "LICENSE": "docs: add MIT license",
@@ -100,7 +112,7 @@ def log(msg: str):
 
 def run_cmd(cmd: List[str], cwd: str = ".") -> Tuple[int, str, str]:
     res = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
-    return res.returncode, res.stdout.strip(), res.stderr.strip()
+    return res.returncode, res.stdout, res.stderr.strip()
 
 
 def get_uncommitted_files() -> List[str]:
@@ -111,9 +123,16 @@ def get_uncommitted_files() -> List[str]:
         return files
 
     for line in stdout.splitlines():
-        if not line:
+        line_clean = line.rstrip("\r\n")
+        if not line_clean.strip():
             continue
-        filepath = line[3:].strip().strip('"')
+        if len(line_clean) >= 4 and line_clean[2] == ' ':
+            filepath = line_clean[3:].strip().strip('"')
+        elif len(line_clean) >= 3 and line_clean[1] == ' ':
+            filepath = line_clean[2:].strip().strip('"')
+        else:
+            filepath = line_clean[3:].strip().strip('"')
+
         # Skip log or state files or scratch
         if filepath in (LOG_FILE, STATE_FILE, ".DS_Store"):
             continue
@@ -142,13 +161,13 @@ def _priority_order(filepath: str) -> int:
         return 1
     if filepath in ("pyproject.toml", "setup.py", "requirements.txt", "go.mod"):
         return 2
-    if "config" in filepath:
+    if "config" in filepath or "validator" in filepath:
         return 3
     if "models.py" in filepath:
         return 4
     if "providers" in filepath:
         return 5
-    if "scanner" in filepath and "cmd" not in filepath:
+    if "scanner" in filepath and "cmd" not in filepath and "pkg" not in filepath:
         return 6
     if "personas" in filepath:
         return 7
@@ -156,11 +175,11 @@ def _priority_order(filepath: str) -> int:
         return 8
     if "presets.py" in filepath:
         return 9
-    if "cli.py" in filepath:
+    if "ci" in filepath or "cli.py" in filepath:
         return 10
     if "web" in filepath:
         return 11
-    if "cmd" in filepath:
+    if "cmd" in filepath or "pkg" in filepath:
         return 12
     if "scripts" in filepath:
         return 13
@@ -197,12 +216,12 @@ def generate_commit_message(filepath: str) -> str:
 
 def has_git_remote(remote_name: str = "origin") -> bool:
     code, stdout, _ = run_cmd(["git", "remote"])
-    return code == 0 and remote_name in stdout.splitlines()
+    return code == 0 and remote_name in [r.strip() for r in stdout.splitlines()]
 
 
 def get_current_branch() -> str:
     code, stdout, _ = run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"])
-    return stdout if code == 0 and stdout else "main"
+    return stdout.strip() if code == 0 and stdout.strip() else "main"
 
 
 def load_state() -> Dict:
@@ -232,7 +251,7 @@ def run_staged_push(
     remote: str = "origin",
     branch: Optional[str] = None,
 ) -> int:
-    branch_name = branch or get_current_branch()
+    branch_name = (branch or get_current_branch()).strip()
     remote_exists = has_git_remote(remote)
 
     log("=" * 60)
