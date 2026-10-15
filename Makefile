@@ -1,4 +1,4 @@
-.PHONY: help test review review-sample fix presets sarif serve personas models dry-run-push staged-push clean
+.PHONY: help test review review-sample fix presets sarif serve personas models validate trends pr-comment dry-run-push staged-push clean
 
 help:
 	@echo "Available commands for AI Agent Panel Review:"
@@ -11,9 +11,21 @@ help:
 	@echo "  make serve            - Start live local Web Dashboard GUI"
 	@echo "  make personas         - List all configured panel personas"
 	@echo "  make models           - Test connectivity to configured AI model providers"
+	@echo "  make validate         - Validate configuration schema and environment API keys"
+	@echo "  make trends           - View historical codebase health and regression trends"
+	@echo "  make pr-comment       - Generate Pull Request review comment markdown"
 	@echo "  make dry-run-push     - Preview staged file-by-file commits schedule"
 	@echo "  make staged-push      - Start staged git commit & push (random 30-45m delay)"
 	@echo "  make clean            - Clean generated reports and caches"
+
+validate:
+	python3 -m panel_review.cli validate-config
+
+trends:
+	python3 -m panel_review.cli trends
+
+pr-comment:
+	python3 -m panel_review.cli pr-comment --path .
 
 fix:
 	python3 -m panel_review.cli fix --path .
