@@ -86,6 +86,16 @@ class ReviewEngine:
                 res = future.result()
                 persona_results.append(res)
 
+        # Run AST Secret Scanner across all files and append to security findings
+        from panel_review.scanner.secret_scanner import SecretScanner
+        for f in repo_info.files:
+            secret_findings = SecretScanner.scan_file_content(f.relative_path, f.content)
+            if secret_findings:
+                sec_res = next((p for p in persona_results if p.persona_id == "security"), None)
+                if sec_res:
+                    sec_res.findings.extend(secret_findings)
+                    sec_res.score = max(10, sec_res.score - (len(secret_findings) * 20))
+
         # Synthesize consensus
         chair_prov_name = self.config.consensus.provider
         chair_mod = self.config.consensus.model
