@@ -116,6 +116,10 @@ class RepositoryInfo:
     languages: Dict[str, int] = field(default_factory=dict)  # language -> file count
     files: List[ScannedFile] = field(default_factory=list)
 
+    def get_file_contents(self) -> Dict[str, str]:
+        """Returns mapping of relative_path -> file content string."""
+        return {f.relative_path: f.content for f in self.files}
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "source": self.source,
