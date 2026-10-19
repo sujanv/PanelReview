@@ -53,6 +53,19 @@ class PersonaConfig:
     severity_threshold: str = "LOW"
     custom_system_prompt: Optional[str] = None
 
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "id": self.id,
+            "enabled": self.enabled,
+            "name": self.name,
+            "title": self.title,
+            "emoji": self.emoji,
+            "provider": self.provider,
+            "model": self.model,
+            "focus_areas": self.focus_areas,
+            "severity_threshold": self.severity_threshold,
+        }
+
 
 @dataclass
 class ConsensusConfig:
